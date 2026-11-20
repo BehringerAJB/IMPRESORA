@@ -670,7 +670,7 @@ async function cargarProveedores() {
     // Cargamos proveedores y filtramos localmente.
     const filas = await rest(encodeURIComponent(T("proveedores")) +
       "?select=" + C("proveedores","cod_prov") + "," + C("proveedores","proveedor") + "," + C("proveedores","cod_tipo") +
-      "&" + C("proveedores","cod_tipo") + "=neq.1");
+      "&order=" + C("proveedores","proveedor"));
     const sel = $("#inp-prov");
     sel.innerHTML = '<option value="">— Seleccionar —</option>';
     filas.forEach(f => {

@@ -982,7 +982,7 @@ async function grabar() {
           [C("planilla_muestra","fecha")]: $("#inp-fecha").value,
           [C("planilla_muestra","producto")]: prodGen,
           [C("planilla_muestra","observaciones")]: $("#inp-obs-muestra").value.trim(),
-          [C("planilla_muestra","nombre")]: (currentUser && currentUser.email) || ""
+          [C("planilla_muestra","nombre")]: nomClienteActual || ""
         };
         hSlots.forEach(s => {
           rec[C("planilla_muestra","h_" + s)] = $("#chk-h" + s).checked;

@@ -414,6 +414,15 @@ td.centro{text-align:center}
   </div>
 </div>
 
+<!-- ====== MODAL DETALLE OT ====== -->
+<div id="modal-detalle" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:999;overflow-y:auto">
+  <div style="max-width:720px;margin:40px auto;background:var(--fondo);border:2px solid var(--dorado);border-radius:10px;padding:24px;position:relative">
+    <button onclick="cerrarDetalle()" style="position:absolute;top:10px;right:14px;background:none;border:none;font-size:24px;cursor:pointer;color:var(--texto)">&times;</button>
+    <h2 style="color:var(--dorado);margin-top:0">Detalle de OT <span id="det-ot-num"></span></h2>
+    <div id="det-contenido" style="font-size:14px;line-height:1.7">Cargando...</div>
+  </div>
+</div>
+
 </main>
 </div>
 
@@ -517,7 +526,6 @@ const TABLAS = {
   proveedores:   ["proveedores","Proveedores","PROVEEDORES"],
   tipoproducto:  ["TipoProducto","tipoproducto","Tipoproducto","TIPOPRODUCTO"],
   nom_imp:       ["nom_imp","Nom_imp","NOM_IMP"],
-  puntero:       ["puntero","Puntero","PUNTERO"],
   fabricados:    ["fabricados","Fabricados","FABRICADOS"],
   tintas:        ["tintas","Tintas","TINTAS"],
   prov_tinta:    ["prov_tinta","Prov_tinta","PROV_TINTA"],
@@ -861,24 +869,7 @@ async function grabar() {
       }
     );
 
-    // 2) Leer puntero y actualizar
-    const puntRows = await rest(
-      encodeURIComponent(T("puntero")) + "?select=*&" + C("puntero","tipo") + "=eq.impresora"
-    );
-    let punteroActual = 0;
-    if (puntRows && puntRows.length) {
-      punteroActual = parseInt(puntRows[0][C("puntero","numero")] || 0) + 1;
-      await rest(
-        encodeURIComponent(T("puntero")) + "?" + C("puntero","tipo") + "=eq.impresora",
-        {
-          method: "PATCH",
-          body: JSON.stringify({ [C("puntero","numero")]: punteroActual + 1 }),
-          headers: { ...H(), "Prefer": "return=minimal" }
-        }
-      );
-    }
-
-    // 3) Insertar en fabricados
+    // 2) Insertar en fabricados
     const plCont = parseFloat($("#inp-pl-cont").value) || 0;
     const kilos = calcKilos(
       otActual[C("orden_fija","formato")],
@@ -978,8 +969,9 @@ async function cargarHistorial() {
     $("#hist-count").textContent = "(" + filas.length + " registros)";
     let html = "";
     filas.forEach(f => {
-      html += "<tr>" +
-        "<td>" + esc(f[C("fabricados","ot")]) + "</td>" +
+      const otVal = f[C("fabricados","ot")] || "";
+      html += '<tr class="clic" onclick="verDetalleOT(\'' + esc(String(otVal)) + '\')">' +
+        "<td>" + esc(otVal) + "</td>" +
         "<td>" + esc(f[C("fabricados","fecha")]) + "</td>" +
         "<td></td>" +
         "<td></td>" +
@@ -997,6 +989,111 @@ async function cargarHistorial() {
   }
 }
 
+/* --- DETALLE OT DESDE HISTORIAL --- */
+async function verDetalleOT(ot) {
+  const modal = $("#modal-detalle");
+  const cont = $("#det-contenido");
+  $("#det-ot-num").textContent = ot;
+  cont.innerHTML = "Cargando...";
+  modal.style.display = "";
+
+  try {
+    // 1) Datos fijos de la orden
+    const fija = await rest(
+      encodeURIComponent(T("orden_fija")) + "?select=*&" + C("orden_fija","ot") + "=eq." + fv(String(ot).trim())
+    );
+    // 2) Productos moviles
+    const movil = await rest(
+      encodeURIComponent(T("orden_movil")) + "?select=*&" + C("orden_movil","ot") + "=eq." + fv(String(ot).trim())
+    );
+    // 3) Registros de fabricados para esta OT
+    const fab = await rest(
+      encodeURIComponent(T("fabricados")) + "?select=*&" + C("fabricados","ot") + "=eq." + fv(String(ot).trim()) +
+      "&order=" + C("fabricados","fecha") + ".desc"
+    );
+
+    let h = "";
+
+    if (fija && fija.length) {
+      const o = fija[0];
+      // Buscar nombre del cliente
+      let clienteNom = o[C("orden_fija","cod_cliente")] || "";
+      try {
+        const cli = await rest(
+          encodeURIComponent(T("clientes_agl")) + "?select=*&" + C("clientes_agl","codigo") + "=eq." + fv(String(clienteNom))
+        );
+        if (cli && cli.length) clienteNom = cli[0][C("clientes_agl","nombre")] || clienteNom;
+      } catch(e){}
+
+      h += '<h3 style="color:var(--dorado);margin:0 0 8px">Datos de la Orden</h3>';
+      h += '<table style="font-size:13px;width:100%;margin-bottom:16px"><tbody>';
+      h += '<tr><td><strong>OT:</strong> ' + esc(o[C("orden_fija","ot")]) + '</td>';
+      h += '<td><strong>Cliente:</strong> ' + esc(clienteNom) + '</td></tr>';
+      h += '<tr><td><strong>Producto:</strong> ' + esc(o[C("orden_fija","prod_generico")] || "") + '</td>';
+      h += '<td><strong>Bocas:</strong> ' + esc(o[C("orden_fija","bocas")] || "") + '</td></tr>';
+      h += '<tr><td><strong>Formato:</strong> ' + esc(o[C("orden_fija","formato")] || "") + '</td>';
+      h += '<td><strong>Corte:</strong> ' + esc(o[C("orden_fija","corte")] || "") + '</td></tr>';
+      h += '<tr><td><strong>Gramaje:</strong> ' + esc(o[C("orden_fija","gramaje")] || "") + '</td>';
+      h += '<td><strong>Prov. Cartulina:</strong> ' + esc(o[C("orden_fija","prov_cartulina")] || "") + '</td></tr>';
+
+      // Flags de etapas
+      const flagImp = o[C("orden_fija","impresora")] ? "SI" : "NO";
+      const flagTroq = o[C("orden_fija","troqueladora")] ? "SI" : "NO";
+      const flagPeg = o[C("orden_fija","pegadora")] ? "SI" : "NO";
+      h += '<tr><td colspan="2"><strong>Etapas:</strong> Impresora: <span class="chip ' + (flagImp==="SI"?"ok":"pend") + '">' + flagImp + '</span> &nbsp; ';
+      h += 'Troqueladora: <span class="chip ' + (flagTroq==="SI"?"ok":"pend") + '">' + flagTroq + '</span> &nbsp; ';
+      h += 'Pegadora: <span class="chip ' + (flagPeg==="SI"?"ok":"pend") + '">' + flagPeg + '</span></td></tr>';
+      h += '</tbody></table>';
+    } else {
+      h += '<p style="color:var(--ambar)">No se encontraron datos fijos para la OT ' + esc(ot) + '.</p>';
+    }
+
+    // Productos moviles
+    if (movil && movil.length) {
+      h += '<h3 style="color:var(--dorado);margin:0 0 8px">Productos</h3>';
+      h += '<table style="font-size:13px;width:100%;margin-bottom:16px"><thead><tr>';
+      h += '<th>Código</th><th>Producto</th><th>Cantidad</th></tr></thead><tbody>';
+      for (const m of movil) {
+        let prodNom = m[C("orden_movil","cod_producto")] || "";
+        try {
+          const pr = await rest(
+            encodeURIComponent(T("productos")) + "?select=*&" + C("productos","codigo") + "=eq." + fv(String(prodNom))
+          );
+          if (pr && pr.length) prodNom = pr[0][C("productos","nombre")] || prodNom;
+        } catch(e){}
+        h += '<tr><td>' + esc(m[C("orden_movil","cod_producto")] || "") + '</td>';
+        h += '<td>' + esc(prodNom) + '</td>';
+        h += '<td class="num">' + esc(m[C("orden_movil","cantidad")] || "") + '</td></tr>';
+      }
+      h += '</tbody></table>';
+    }
+
+    // Registros de fabricados
+    if (fab && fab.length) {
+      h += '<h3 style="color:var(--dorado);margin:0 0 8px">Registros de Fabricación</h3>';
+      h += '<table style="font-size:13px;width:100%"><thead><tr>';
+      h += '<th>Fecha</th><th>Sector</th><th>Pliegos</th><th>Kilos</th></tr></thead><tbody>';
+      fab.forEach(f => {
+        h += '<tr><td>' + esc(f[C("fabricados","fecha")] || "") + '</td>';
+        h += '<td>' + esc(f[C("fabricados","sector")] || "") + '</td>';
+        h += '<td class="num">' + esc(f[C("fabricados","pliegos_cont")] || "") + '</td>';
+        h += '<td class="num">' + esc(f[C("fabricados","kilos")] || "") + '</td></tr>';
+      });
+      h += '</tbody></table>';
+    }
+
+    cont.innerHTML = h;
+  } catch(e) {
+    cont.innerHTML = '<p style="color:red">Error cargando detalle: ' + esc(e.message) + '</p>';
+  }
+}
+
+function cerrarDetalle() {
+  $("#modal-detalle").style.display = "none";
+}
+// Cerrar modal con Escape
+document.addEventListener("keydown", e => { if (e.key === "Escape") cerrarDetalle(); });
+
 /* --- INICIO --- */
 async function iniciar() {
   const ec = $("#estado-conn");
@@ -1007,7 +1104,7 @@ async function iniciar() {
     await resolverEsquema();
 
     // Verificar tablas críticas
-    const criticas = ["orden_fija","puntero","fabricados","tintas","nom_imp","proveedores","clientes_agl","productos"];
+    const criticas = ["orden_fija","fabricados","tintas","nom_imp","proveedores","clientes_agl","productos"];
     const faltantes = criticas.filter(t => !ESQ[t] || !ESQ[t].ok);
 
     if (faltantes.length) {

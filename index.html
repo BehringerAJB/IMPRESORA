@@ -433,6 +433,7 @@ td.centro{text-align:center}
     <div class="cuerpo sin-pad">
       <div style="padding:12px 16px">
         <div class="fila">
+          <div class="campo"><label>Orden de Trabajo</label><input type="text" id="hist-ot" placeholder="Nº OT" style="width:120px"></div>
           <div class="campo"><label>Desde</label><input type="date" id="hist-desde"></div>
           <div class="campo"><label>Hasta</label><input type="date" id="hist-hasta"></div>
           <button class="btn chico" onclick="cargarHistorial()">Filtrar</button>
@@ -1031,18 +1032,32 @@ function cancelarCarga() {
 
 /* --- HISTORIAL --- */
 async function cargarHistorial() {
+  const otFiltro = $("#hist-ot").value.trim();
   const desde = $("#hist-desde").value;
   const hasta = $("#hist-hasta").value;
-  if (!desde || !hasta) { toast("Seleccione rango de fechas.", "error"); return; }
+
+  // Validar: al menos OT o rango de fechas
+  const hayFechas = desde && hasta;
+  const hayOT = otFiltro !== "";
+  if (!hayFechas && !hayOT) {
+    toast("Ingrese una Orden de Trabajo o un rango de fechas.", "error");
+    return;
+  }
 
   try {
-    const filas = await rest(
-      encodeURIComponent(T("fabricados")) +
-      "?select=*&" + C("fabricados","sector") + "=eq.impresora" +
-      "&" + C("fabricados","fecha") + "=gte." + desde +
-      "&" + C("fabricados","fecha") + "=lte." + hasta +
-      "&order=" + C("fabricados","fecha") + ".desc&limit=500"
-    );
+    let query = encodeURIComponent(T("fabricados")) +
+      "?select=*&" + C("fabricados","sector") + "=eq.impresora";
+
+    if (hayOT) {
+      query += "&" + C("fabricados","ot") + "=eq." + fv(otFiltro);
+    }
+    if (hayFechas) {
+      query += "&" + C("fabricados","fecha") + "=gte." + desde +
+               "&" + C("fabricados","fecha") + "=lte." + hasta;
+    }
+    query += "&order=" + C("fabricados","fecha") + ".desc&limit=500";
+
+    const filas = await rest(query);
 
     const tb = $("#hist-body");
     if (!filas || !filas.length) {

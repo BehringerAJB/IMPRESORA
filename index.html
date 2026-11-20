@@ -76,6 +76,7 @@ header{
   background:var(--oro);display:flex;align-items:center;flex-wrap:wrap;
   padding:0 18px;box-shadow:0 2px 6px rgba(0,0,0,.18);
   position:sticky;top:0;z-index:50;
+  border-bottom:4px solid #2a7b7b;
 }
 .marca{display:flex;align-items:center;gap:10px;padding:10px 22px 10px 0;color:#fff}
 .marca .escudo{
@@ -209,6 +210,16 @@ td.centro{text-align:center}
 .color-grid select,.color-grid input{font-size:12.5px;padding:5px 7px}
 .color-section{border:1px solid var(--borde);border-radius:4px;padding:14px;margin-top:12px;background:#fdfcf9}
 .color-section.disabled{opacity:.5;pointer-events:none}
+.muestra-section{border:1px solid var(--borde);border-radius:4px;padding:14px;margin-top:12px;background:#fdfcf9}
+.muestra-section.disabled{opacity:.5;pointer-events:none}
+.muestra-grid{display:flex;flex-wrap:wrap;gap:4px 0;margin-top:8px}
+.muestra-grid label.check-hora{
+  display:inline-flex;align-items:center;gap:4px;font-size:12px;
+  padding:4px 8px;border:1px solid var(--borde);border-radius:3px;
+  cursor:pointer;user-select:none;background:#fff;min-width:70px;
+}
+.muestra-grid label.check-hora input{width:14px;height:14px;accent-color:#2a7b7b}
+.muestra-grid label.check-hora:has(input:checked){background:#e0f0ef;border-color:#2a7b7b;font-weight:600}
 
 @media print{
   header,nav,.topbar,.btn,#toast,.no-print{display:none!important}
@@ -377,6 +388,35 @@ td.centro{text-align:center}
         </div>
       </div>
 
+      <!-- SECCION HORARIOS DE MUESTRAS -->
+      <div style="margin-top:16px;margin-bottom:12px">
+        <label class="check">
+          <input type="checkbox" id="chk-muestra" onchange="toggleMuestra()">
+          <strong>Horarios de las Muestras</strong>
+        </label>
+      </div>
+
+      <div class="muestra-section disabled" id="sec-muestra">
+        <div class="muestra-grid">
+          <label class="check-hora"><input type="checkbox" id="chk-h67">6-7</label>
+          <label class="check-hora"><input type="checkbox" id="chk-h78">7-8</label>
+          <label class="check-hora"><input type="checkbox" id="chk-h89">8-9</label>
+          <label class="check-hora"><input type="checkbox" id="chk-h910">9-10</label>
+          <label class="check-hora"><input type="checkbox" id="chk-h1011">10-11</label>
+          <label class="check-hora"><input type="checkbox" id="chk-h1112">11-12</label>
+          <label class="check-hora"><input type="checkbox" id="chk-h1213">12-13</label>
+          <label class="check-hora"><input type="checkbox" id="chk-h1314">13-14</label>
+          <label class="check-hora"><input type="checkbox" id="chk-h1415">14-15</label>
+          <label class="check-hora"><input type="checkbox" id="chk-h1516">15-16</label>
+          <label class="check-hora"><input type="checkbox" id="chk-h1617">16-17</label>
+          <label class="check-hora"><input type="checkbox" id="chk-h1718">17-18</label>
+          <label class="check-hora"><input type="checkbox" id="chk-h1819">18-19</label>
+        </div>
+        <div class="fila" style="margin-top:10px">
+          <div class="campo" style="flex:1"><label>Observaciones</label><textarea id="inp-obs-muestra" rows="2" style="width:100%;resize:vertical;font-size:13px;padding:6px 8px;border:1px solid var(--borde);border-radius:3px"></textarea></div>
+        </div>
+      </div>
+
       <div style="margin-top:18px;display:flex;gap:10px">
         <button class="btn" id="btn-grabar" onclick="grabar()">Grabar</button>
         <button class="btn sec" onclick="cancelarCarga()">Cancelar</button>
@@ -530,7 +570,8 @@ const TABLAS = {
   tintas:        ["tintas","Tintas","TINTAS"],
   prov_tinta:    ["prov_tinta","Prov_tinta","PROV_TINTA"],
   productos:     ["productos","Productos","PRODUCTOS"],
-  tipos_provedores: ["tipos_provedores","Tipos_provedores","TIPOS_PROVEDORES"]
+  tipos_provedores: ["tipos_provedores","Tipos_provedores","TIPOS_PROVEDORES"],
+  planilla_muestra: ["planilla_muestra","Planilla_muestra","PLANILLA_MUESTRA"]
 };
 
 const ESQ = {};
@@ -629,6 +670,13 @@ function recalcKilos() {
 }
 
 /* --- Toggle colores --- */
+function toggleMuestra() {
+  const on = $("#chk-muestra").checked;
+  const sec = $("#sec-muestra");
+  if (on) sec.classList.remove("disabled");
+  else sec.classList.add("disabled");
+}
+
 function toggleColor() {
   const on = $("#chk-color").checked;
   const sec = $("#sec-colores");
@@ -922,6 +970,36 @@ async function grabar() {
       }
     }
 
+    // 5) Guardar planilla de muestra (si está habilitada)
+    if ($("#chk-muestra").checked && T("planilla_muestra")) {
+      try {
+        const impNom = $("#inp-impresora").value;
+        const prodGen = otActual[C("orden_fija","prod_generico")] || otActual[C("orden_fija","producto")] || "";
+        const hSlots = ["67","78","89","910","1011","1112","1213","1314","1415","1516","1617","1718","1819"];
+        const rec = {
+          [C("planilla_muestra","ot")]: ot,
+          [C("planilla_muestra","maquina")]: impNom,
+          [C("planilla_muestra","fecha")]: $("#inp-fecha").value,
+          [C("planilla_muestra","producto")]: prodGen,
+          [C("planilla_muestra","observaciones")]: $("#inp-obs-muestra").value.trim(),
+          [C("planilla_muestra","nombre")]: (currentUser && currentUser.email) || ""
+        };
+        hSlots.forEach(s => {
+          rec[C("planilla_muestra","h_" + s)] = $("#chk-h" + s).checked;
+        });
+        await rest(
+          encodeURIComponent(T("planilla_muestra")),
+          {
+            method: "POST",
+            body: JSON.stringify(rec),
+            headers: { ...H(), "Prefer": "return=minimal" }
+          }
+        );
+      } catch (epm) {
+        console.warn("Planilla muestra no guardada:", epm.message);
+      }
+    }
+
     toast("Impresión de OT " + ot + " grabada correctamente.", "exito");
 
     // Limpiar
@@ -942,6 +1020,13 @@ function cancelarCarga() {
   $("#card-carga").style.display = "none";
   $("#inp-ot").value = "";
   avisar("#aviso-busqueda","","");
+  // Limpiar muestras
+  $("#chk-muestra").checked = false;
+  toggleMuestra();
+  ["67","78","89","910","1011","1112","1213","1314","1415","1516","1617","1718","1819"].forEach(s => {
+    $("#chk-h" + s).checked = false;
+  });
+  $("#inp-obs-muestra").value = "";
 }
 
 /* --- HISTORIAL --- */
